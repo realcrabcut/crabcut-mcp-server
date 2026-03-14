@@ -6,7 +6,7 @@ You give it a YouTube link. It finds the best moments, reframes them for vertica
 
 ## Setup
 
-1. Get an API key at [crabcut.ai/developers](https://crabcut.ai/developers)
+1. Get an API key at [app.crabcut.ai/developers](https://app.crabcut.ai/developers)
 2. Run:
 
 ```bash
@@ -72,10 +72,6 @@ Just paste a YouTube link in the chat. The assistant will call `generate_clips` 
 
 Use `start_time: 0` and `end_time: 300` to process a specific segment.
 
-**"Make it landscape"**
-
-Set `aspect_ratio: "16:9"` instead of the default vertical `9:16`.
-
 ## How billing works
 
 Each minute of video you process costs credits. You can check your balance anytime with `check_usage`. Buy credits at [crabcut.ai/pricing](https://crabcut.ai/pricing).
@@ -90,7 +86,7 @@ Each minute of video you process costs credits. You can check your balance anyti
 ## Links
 
 - Website: [crabcut.ai](https://crabcut.ai)
-- Get your key: [crabcut.ai/developers](https://crabcut.ai/developers)
+- Get your key: [app.crabcut.ai/developers](https://app.crabcut.ai/developers)
 - REST API base: `https://api.crabcut.ai/api/v1`
 
 ## License

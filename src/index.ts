@@ -9,7 +9,7 @@ const API_BASE = process.env.CRABCUT_API_URL || "https://api.crabcut.ai";
 
 if (!API_KEY) {
   console.error("Error: CRABCUT_API_KEY environment variable is required.");
-  console.error("Get your API key at https://crabcut.ai/developers");
+  console.error("Get your API key at https://app.crabcut.ai/developers");
   process.exit(1);
 }
 
@@ -87,10 +87,6 @@ server.tool(
       .number()
       .optional()
       .describe("End time in seconds (optional, to process only a segment)"),
-    aspect_ratio: z
-      .enum(["9:16", "16:9"])
-      .optional()
-      .describe("Output aspect ratio — 9:16 for vertical/TikTok (default), 16:9 for landscape"),
     wait_for_completion: z
       .boolean()
       .optional()
@@ -100,13 +96,12 @@ server.tool(
       .optional()
       .describe("Optional webhook URL — Crabcut will POST results here when done"),
   },
-  async ({ url, start_time, end_time, aspect_ratio, wait_for_completion, callback_url }) => {
+  async ({ url, start_time, end_time, wait_for_completion, callback_url }) => {
     try {
       const result = await apiCall("POST", "/clips/generate", {
         url,
         start_time,
         end_time,
-        aspect_ratio,
         callback_url,
       });
 
