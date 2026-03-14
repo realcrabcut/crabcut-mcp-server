@@ -24,7 +24,7 @@ az containerapp update \
 || az containerapp create \
   --name "$APP_NAME" \
   --resource-group "$RESOURCE_GROUP" \
-  --environment crabcut-mcp-env \
+  --environment crabcut-env \
   --image "$REGISTRY.azurecr.io/$IMAGE:$TAG" \
   --registry-server "$REGISTRY.azurecr.io" \
   --target-port 8080 \
