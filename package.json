@@ -1,6 +1,6 @@
 {
   "name": "@crabcut/mcp-server",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MCP server for Crabcut AI video clip generation — turn YouTube videos into short-form clips from any AI assistant",
   "type": "module",
   "bin": {
