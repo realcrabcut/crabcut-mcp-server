@@ -1,6 +1,6 @@
 {
   "name": "@crabcut/mcp-server",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "mcpName": "io.github.realcrabcut/crabcut",
   "description": "MCP server for Crabcut AI video clip generation — turn YouTube videos into short-form clips from any AI assistant",
   "repository": {
