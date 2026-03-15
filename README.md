@@ -4,6 +4,8 @@ Turn YouTube videos into short clips -- from Claude, Cursor, or any AI assistant
 
 You give it a YouTube link. It finds the best moments, reframes them for vertical video (9:16), adds subtitles, and gives you download links. All from a chat or automation workflow.
 
+[![CrabCut MCP server](https://glama.ai/mcp/servers/realcrabcut/crabcut-mcp-server/badges/card.svg)](https://glama.ai/mcp/servers/realcrabcut/crabcut-mcp-server)
+
 ## Quick Start
 
 1. Get an API key at [app.crabcut.ai/developers](https://app.crabcut.ai/developers)
