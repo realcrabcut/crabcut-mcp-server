@@ -14,7 +14,7 @@ app.get("/health", (_req, res) => {
 
 app.get("/.well-known/mcp/server-card.json", (_req, res) => {
   res.json({
-    serverInfo: { name: "crabcut", version: "1.0.6" },
+    serverInfo: { name: "crabcut", version: "2.0.0" },
     authentication: {
       required: true,
       schemes: ["bearer"],
@@ -26,63 +26,50 @@ app.get("/.well-known/mcp/server-card.json", (_req, res) => {
       {
         name: "generate_clips",
         description:
-          "Submit a YouTube video for AI clip generation. Returns an array of clips, each with a title, duration in seconds, engagement score, and download URL. By default waits up to 5 minutes for processing to complete.",
+          "Start AI clip generation from a YouTube video. Returns a project_id immediately. Poll with get_project_status every 10-15 seconds, or provide a callback_url for webhook notification.",
         inputSchema: {
           type: "object",
           properties: {
             url: { type: "string", description: "Full YouTube video URL (e.g. https://www.youtube.com/watch?v=...)" },
-            start_time: { type: "number", description: "Start time in seconds to clip only a segment of the video. Omit to process the full video." },
-            end_time: { type: "number", description: "End time in seconds to clip only a segment of the video. Omit to process the full video." },
-            wait_for_completion: { type: "boolean", description: "If true (default), blocks until all clips are generated. If false, returns a project_id immediately." },
-            callback_url: { type: "string", description: "Webhook URL to receive a POST with the completed project payload." },
+            start_time: { type: "number", description: "Start time in seconds to clip only a segment. Omit to process the full video." },
+            end_time: { type: "number", description: "End time in seconds to clip only a segment. Omit to process the full video." },
+            callback_url: { type: "string", description: "Webhook URL to receive a POST when all clips are ready with download links." },
           },
           required: ["url"],
         },
       },
       {
         name: "get_project_status",
-        description: "Returns the current status of a clip generation project: pending, processing, completed, completed_no_clips, or failed. When completed, includes the clips array.",
+        description: "Returns project status and clips sorted by score. Each clip has a clip_status (pending/exporting/completed/failed) and download_url when ready. Poll every 10-15 seconds.",
         inputSchema: {
           type: "object",
-          properties: { project_id: { type: "string", description: "The project ID returned by generate_clips when wait_for_completion is false." } },
+          properties: { project_id: { type: "string", description: "The project ID returned by generate_clips." } },
           required: ["project_id"],
         },
       },
       {
         name: "list_projects",
-        description: "Returns a paginated list of the user's clip generation projects, each with project_id, status, source YouTube URL, creation date, and clip count.",
+        description: "Returns a paginated list of the user's projects with IDs, statuses, and clip counts.",
         inputSchema: {
           type: "object",
           properties: {
-            limit: { type: "number", description: "Maximum number of projects to return. Defaults to 20, maximum 100." },
-            status: { type: "string", enum: ["pending", "processing", "completed", "completed_no_clips", "failed"], description: "Filter results to only projects with this status." },
+            limit: { type: "number", description: "Maximum projects to return. Defaults to 20, max 100." },
+            status: { type: "string", enum: ["pending", "processing", "completed", "completed_no_clips", "failed"], description: "Filter by status." },
           },
         },
       },
       {
         name: "get_clip",
-        description: "Returns full details of a single clip: title, duration, engagement score, subtitle text, export status, and video_url if exported.",
+        description: "Returns full details of a single clip: title, duration, score, clip_status, and download_url when exported.",
         inputSchema: {
           type: "object",
-          properties: { clip_id: { type: "string", description: "The unique clip ID from a completed project's clips array." } },
-          required: ["clip_id"],
-        },
-      },
-      {
-        name: "download_clip",
-        description: "Returns a temporary signed download URL for a clip's video file. Triggers export automatically if not yet exported and polls until ready.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            clip_id: { type: "string", description: "The unique clip ID to export and download." },
-            quality: { type: "string", enum: ["720p", "1080p"], description: "Video export quality. Free plans support 720p only. Pro plans default to 1080p." },
-          },
+          properties: { clip_id: { type: "string", description: "The unique clip ID from a project's clips array." } },
           required: ["clip_id"],
         },
       },
       {
         name: "check_usage",
-        description: "Returns the user's current plan name, remaining credits, total credits, and usage period.",
+        description: "Returns the user's current plan, remaining credits, total credits, and usage period.",
         inputSchema: { type: "object", properties: {} },
       },
     ],

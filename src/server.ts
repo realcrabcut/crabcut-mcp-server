@@ -36,47 +36,17 @@ async function apiCall(
   return data;
 }
 
-async function pollProject(
-  config: ApiConfig,
-  projectId: string,
-  maxWaitMs = 300_000
-): Promise<Record<string, unknown>> {
-  const start = Date.now();
-  const intervals = [3000, 5000, 8000, 10000];
-  let attempt = 0;
-
-  while (Date.now() - start < maxWaitMs) {
-    const project = await apiCall(config, "GET", `/projects/${projectId}`);
-    const status = project.status as string;
-
-    if (status === "completed" || status === "completed_no_clips") {
-      return project;
-    }
-    if (status === "failed") {
-      throw new Error(
-        `Clip generation failed: ${(project.error as string) || "Unknown error"}`
-      );
-    }
-
-    const delay = intervals[Math.min(attempt, intervals.length - 1)];
-    await new Promise((r) => setTimeout(r, delay));
-    attempt++;
-  }
-
-  return apiCall(config, "GET", `/projects/${projectId}`);
-}
-
 export function createServer(config: ApiConfig): McpServer {
   const server = new McpServer({
     name: "crabcut",
-    version: "1.0.6",
+    version: "2.0.0",
     description:
       "AI-powered short-form video clip generator. Use this server when the user wants to create TikTok, YouTube Shorts, or Instagram Reels clips from a YouTube video. It handles highlight detection, subtitle generation, 9:16 vertical reframing, and returns download-ready clips. Requires a Crabcut API key from https://app.crabcut.ai/developers.",
   });
 
   server.tool(
     "generate_clips",
-    "Submit a YouTube video for AI clip generation. Returns an array of clips, each with a title, duration in seconds, engagement score, and download URL. By default waits up to 5 minutes for processing to complete. Set wait_for_completion to false to get a project_id immediately and poll with get_project_status later.",
+    "Start AI clip generation from a YouTube video. Returns a project_id immediately. Use get_project_status to poll for results every 10-15 seconds, or provide a callback_url to receive a webhook when all clips are ready with download links.",
     {
       url: z.string().describe("Full YouTube video URL (e.g. https://www.youtube.com/watch?v=...)"),
       start_time: z
@@ -89,26 +59,14 @@ export function createServer(config: ApiConfig): McpServer {
         .number()
         .optional()
         .describe("End time in seconds to clip only a segment of the video. Omit to process the full video."),
-      wait_for_completion: z
-        .boolean()
-        .optional()
-        .describe(
-          "If true (default), blocks until all clips are generated and returns them. If false, returns a project_id immediately — use get_project_status to poll."
-        ),
       callback_url: z
         .string()
         .optional()
         .describe(
-          "Webhook URL to receive a POST with the completed project payload when processing finishes."
+          "Webhook URL to receive a POST when processing finishes. The payload includes an array of clips sorted by score, each with a download_url."
         ),
     },
-    async ({
-      url,
-      start_time,
-      end_time,
-      wait_for_completion,
-      callback_url,
-    }) => {
+    async ({ url, start_time, end_time, callback_url }) => {
       try {
         const result = await apiCall(config, "POST", "/clips/generate", {
           url,
@@ -117,48 +75,23 @@ export function createServer(config: ApiConfig): McpServer {
           callback_url,
         });
 
-        const projectId = result.project_id as string;
-        const shouldWait = wait_for_completion !== false;
-
-        if (!shouldWait) {
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify(
-                  {
-                    status: "processing",
-                    project_id: projectId,
-                    message:
-                      "Clip generation started. Use get_project_status to check progress.",
-                  },
-                  null,
-                  2
-                ),
-              },
-            ],
-          };
-        }
-
-        const project = await pollProject(config, projectId);
-        const clips =
-          (project.clips as Array<Record<string, unknown>>) || [];
-
-        const summary =
-          clips.length > 0
-            ? clips
-                .map(
-                  (c, i) =>
-                    `Clip ${i + 1}: "${c.title || "Untitled"}" (${c.duration}s, score: ${c.score || "N/A"})`
-                )
-                .join("\n")
-            : "No clips were generated from this video.";
-
         return {
           content: [
             {
               type: "text" as const,
-              text: `Generated ${clips.length} clips from the video.\n\n${summary}\n\nFull details:\n${JSON.stringify(project, null, 2)}`,
+              text: JSON.stringify(
+                {
+                  project_id: result.project_id,
+                  status: "processing",
+                  poll_url: result.poll_url,
+                  estimated_minutes: result.estimated_minutes,
+                  message: callback_url
+                    ? "Processing started. A webhook will be sent to your callback_url when ready."
+                    : "Processing started. Poll with get_project_status every 10-15 seconds until status is 'completed'.",
+                },
+                null,
+                2
+              ),
             },
           ],
         };
@@ -174,11 +107,11 @@ export function createServer(config: ApiConfig): McpServer {
 
   server.tool(
     "get_project_status",
-    "Returns the current status of a clip generation project: pending, processing, completed, completed_no_clips, or failed. When completed, the response includes an array of generated clips with their titles, durations, scores, and download URLs.",
+    "Returns the current status of a clip generation project: pending, processing, completed, completed_no_clips, or failed. Clips are sorted by score (best first). Each clip has a clip_status (pending, exporting, completed, failed) and a download_url when completed. Poll every 10-15 seconds.",
     {
       project_id: z
         .string()
-        .describe("The project ID returned by generate_clips when wait_for_completion is false"),
+        .describe("The project ID returned by generate_clips"),
     },
     async ({ project_id }) => {
       try {
@@ -248,9 +181,9 @@ export function createServer(config: ApiConfig): McpServer {
 
   server.tool(
     "get_clip",
-    "Returns full details of a single clip: title, duration, engagement score, subtitle text, export status (pending/processing/exported/failed), and video_url if exported. Use this to inspect a clip before downloading.",
+    "Returns full details of a single clip: title, duration, engagement score, clip_status (pending/exporting/completed/failed), and download_url when exported.",
     {
-      clip_id: z.string().describe("The unique clip ID from a completed project's clips array."),
+      clip_id: z.string().describe("The unique clip ID from a project's clips array."),
     },
     async ({ clip_id }) => {
       try {
@@ -258,87 +191,6 @@ export function createServer(config: ApiConfig): McpServer {
         return {
           content: [
             { type: "text" as const, text: JSON.stringify(clip, null, 2) },
-          ],
-        };
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        return {
-          content: [{ type: "text" as const, text: `Error: ${message}` }],
-          isError: true,
-        };
-      }
-    }
-  );
-
-  server.tool(
-    "download_clip",
-    "Returns a temporary download URL for a clip's video file. If the clip hasn't been exported yet, triggers export and polls until ready (up to 3 minutes). The returned URL is a signed link valid for a limited time.",
-    {
-      clip_id: z.string().describe("The unique clip ID to export and download."),
-      quality: z
-        .enum(["720p", "1080p"])
-        .optional()
-        .describe(
-          "Video export quality. Free plans support 720p only. Pro plans default to 1080p."
-        ),
-    },
-    async ({ clip_id, quality }) => {
-      try {
-        const clip = (await apiCall(
-          config,
-          "GET",
-          `/clips/${clip_id}`
-        )) as Record<string, unknown>;
-
-        if (!clip.is_exported && clip.export_status !== "processing") {
-          await apiCall(config, "POST", `/clips/${clip_id}/export`, {
-            quality,
-          });
-        }
-
-        const maxWait = 180_000;
-        const start = Date.now();
-        let attempt = 0;
-        const intervals = [2000, 3000, 5000, 8000];
-
-        while (Date.now() - start < maxWait) {
-          const current = (await apiCall(
-            config,
-            "GET",
-            `/clips/${clip_id}`
-          )) as Record<string, unknown>;
-
-          if (current.is_exported || current.video_url) {
-            const result = await apiCall(
-              config,
-              "GET",
-              `/clips/${clip_id}/download`
-            );
-            return {
-              content: [
-                {
-                  type: "text" as const,
-                  text: JSON.stringify(result, null, 2),
-                },
-              ],
-            };
-          }
-
-          if (current.export_status === "failed") {
-            throw new Error("Clip export failed");
-          }
-
-          const delay = intervals[Math.min(attempt, intervals.length - 1)];
-          await new Promise((r) => setTimeout(r, delay));
-          attempt++;
-        }
-
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: "Export is still processing. Try again in a minute with the same clip_id.",
-            },
           ],
         };
       } catch (err: unknown) {
