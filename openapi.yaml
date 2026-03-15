@@ -1,0 +1,416 @@
+openapi: 3.0.3
+info:
+  title: Crabcut
+  description: >
+    Turn YouTube videos into short-form vertical clips with AI-powered scoring,
+    subtitles, and reframing. Submit a YouTube URL and get back ranked clips
+    with download links. Supports async processing with webhook callbacks.
+  version: 2.0.2
+  contact:
+    name: Crabcut
+    url: https://crabcut.ai
+  termsOfService: https://crabcut.ai/terms
+
+servers:
+  - url: https://api.crabcut.ai
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/clips/generate:
+    post:
+      operationId: generateClips
+      summary: Generate Clips
+      description: >
+        Start clip generation from a YouTube URL. Returns a project_id immediately.
+        Processing takes a few minutes. Use get_project_status to poll for results,
+        or pass a callback_url to receive a webhook when all clips are exported.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - url
+              properties:
+                url:
+                  type: string
+                  description: Full YouTube video URL
+                  example: "https://www.youtube.com/watch?v=AeKizzQpPpY"
+                start_time:
+                  type: number
+                  description: Start time in seconds (to process only a segment)
+                  example: 0
+                end_time:
+                  type: number
+                  description: End time in seconds (to process only a segment)
+                  example: 120
+                callback_url:
+                  type: string
+                  description: Webhook URL to receive results when all clips are exported
+                  example: "https://your-server.com/webhook/crabcut"
+      responses:
+        "202":
+          description: Processing started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  project_id:
+                    type: string
+                    format: uuid
+                    description: Unique project identifier
+                    example: "43dbe622-8ac6-4579-9625-0ad7f0f9db0b"
+                  status:
+                    type: string
+                    enum: [processing]
+                    example: "processing"
+                  estimated_minutes:
+                    type: integer
+                    description: Estimated processing time in minutes
+                    example: 5
+                  poll_url:
+                    type: string
+                    description: Relative URL to poll for status
+                    example: "/api/v1/projects/43dbe622-8ac6-4579-9625-0ad7f0f9db0b"
+                  message:
+                    type: string
+                    example: "Processing started. Poll GET /api/v1/projects/:id every 10-15 seconds until status is \"completed\"."
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "402":
+          description: Insufficient credits
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Insufficient credits"
+                  required:
+                    type: integer
+                    example: 10
+                  available:
+                    type: integer
+                    example: 3
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/projects/{id}:
+    get:
+      operationId: getProjectStatus
+      summary: Get Project Status
+      description: >
+        Check progress and get clips when ready. Poll every 10-15 seconds.
+        Clips are sorted by score (highest first). Each clip includes a
+        clip_status and download_url when exported.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Project ID from generate_clips
+      responses:
+        "200":
+          description: Project status and clips
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  name:
+                    type: string
+                    description: Video title
+                    example: "Friends: Someone Ate Ross' Sandwich"
+                  status:
+                    type: string
+                    enum: [pending, processing, completed, completed_no_clips, failed]
+                    description: Project status
+                  step:
+                    type: string
+                    enum: [queued, DOWNLOADING_VIDEO, EXTRACTING_AUDIO, TRANSCRIBING, DETECTING_HIGHLIGHTS, CUTTING_CLIPS, EXPORTING_CLIPS, done]
+                    description: Current processing step
+                  error:
+                    type: string
+                    nullable: true
+                    description: Error message if failed
+                  expected_clips:
+                    type: integer
+                    description: Number of clips expected
+                  duration:
+                    type: number
+                    description: Video duration in seconds
+                  created_at:
+                    type: string
+                    format: date-time
+                  clips:
+                    type: array
+                    description: Clips sorted by score (best first)
+                    items:
+                      $ref: "#/components/schemas/ProjectClip"
+        "404":
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/projects:
+    get:
+      operationId: listProjects
+      summary: List Projects
+      description: List your projects with status and clip counts. Sorted by most recent first.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+          description: Max projects to return (default 20, max 100)
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+          description: Number of projects to skip for pagination
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, processing, completed, completed_no_clips, failed]
+          description: Filter by project status
+      responses:
+        "200":
+          description: Paginated list of projects
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  projects:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        status:
+                          type: string
+                          enum: [pending, processing, completed, completed_no_clips, failed]
+                        step:
+                          type: string
+                        expected_clips:
+                          type: integer
+                        clips_count:
+                          type: integer
+                          description: Number of clips generated so far
+                        duration:
+                          type: number
+                          description: Video duration in seconds
+                        created_at:
+                          type: string
+                          format: date-time
+                  total:
+                    type: integer
+                    description: Total projects matching the filter
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+
+  /api/v1/clips/{id}:
+    get:
+      operationId: getClip
+      summary: Get Clip
+      description: Get full details for a single clip including all export URLs.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Clip ID
+      responses:
+        "200":
+          description: Clip details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  project_id:
+                    type: string
+                    format: uuid
+                  title:
+                    type: string
+                    example: "One Dating Theory Leads to Chaos"
+                  duration:
+                    type: number
+                    description: Clip duration in seconds
+                    example: 41.83
+                  score:
+                    type: integer
+                    description: AI virality score (0-100)
+                    example: 90
+                  reason:
+                    type: string
+                    description: Why this clip was selected
+                  export_status:
+                    type: string
+                    nullable: true
+                    enum: [processing, completed, failed]
+                  export_quality:
+                    type: string
+                    nullable: true
+                    enum: ["720p", "1080p"]
+                  is_exported:
+                    type: boolean
+                  video_url:
+                    type: string
+                    nullable: true
+                    description: Export URL (primary)
+                  video_url_720p:
+                    type: string
+                    nullable: true
+                    description: 720p export URL (free plan)
+                  video_url_1080p:
+                    type: string
+                    nullable: true
+                    description: 1080p export URL (pro plan)
+                  thumbnail_url:
+                    type: string
+                    nullable: true
+                  created_at:
+                    type: string
+                    format: date-time
+                  updated_at:
+                    type: string
+                    format: date-time
+        "404":
+          description: Clip not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/account/usage:
+    get:
+      operationId: checkUsage
+      summary: Check Usage
+      description: See your plan type, remaining credits, and account email.
+      responses:
+        "200":
+          description: Account usage info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  credits_remaining:
+                    type: integer
+                    description: Credits available for use
+                    example: 450
+                  plan:
+                    type: string
+                    enum: [free, pro]
+                    description: Current plan
+                    example: "pro"
+                  email:
+                    type: string
+                    description: Account email
+                    example: "user@example.com"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "API key from app.crabcut.ai/developers. Format: Bearer sk_live_..."
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+          example: "Unauthorized"
+
+    ProjectClip:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          example: "He Learns What Happened to the Sandwich"
+        duration:
+          type: number
+          description: Clip duration in seconds
+          example: 42.64
+        score:
+          type: integer
+          description: AI virality score (0-100, higher is better)
+          example: 93
+        reason:
+          type: string
+          description: Why this clip scored well
+        clip_status:
+          type: string
+          enum: [pending, exporting, completed, failed]
+          description: Export status of this clip
+        download_url:
+          type: string
+          nullable: true
+          description: Direct download URL (available when clip_status is completed)
+          example: "https://cdn.crabcut.ai/exports/premium/.../clip.mp4"
+        quality:
+          type: string
+          nullable: true
+          enum: ["720p", "1080p"]
+          description: Export quality (720p for free, 1080p for pro)
+        thumbnail_url:
+          type: string
+          nullable: true
+          description: Clip thumbnail image URL
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time

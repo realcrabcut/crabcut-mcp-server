@@ -66,6 +66,13 @@ export function createServer(config: ApiConfig): McpServer {
           "Webhook URL to receive a POST when processing finishes. The payload includes an array of clips sorted by score, each with a download_url."
         ),
     },
+    {
+      title: "Generate Clips",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     async ({ url, start_time, end_time, callback_url }) => {
       try {
         const result = await apiCall(config, "POST", "/clips/generate", {
@@ -113,6 +120,13 @@ export function createServer(config: ApiConfig): McpServer {
         .string()
         .describe("The project ID returned by generate_clips"),
     },
+    {
+      title: "Get Project Status",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     async ({ project_id }) => {
       try {
         const project = await apiCall(config, "GET", `/projects/${project_id}`);
@@ -153,6 +167,13 @@ export function createServer(config: ApiConfig): McpServer {
         .optional()
         .describe("Filter results to only projects with this status."),
     },
+    {
+      title: "List Projects",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     async ({ limit, status }) => {
       try {
         const params = new URLSearchParams();
@@ -185,6 +206,13 @@ export function createServer(config: ApiConfig): McpServer {
     {
       clip_id: z.string().describe("The unique clip ID from a project's clips array."),
     },
+    {
+      title: "Get Clip",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     async ({ clip_id }) => {
       try {
         const clip = await apiCall(config, "GET", `/clips/${clip_id}`);
@@ -206,7 +234,13 @@ export function createServer(config: ApiConfig): McpServer {
   server.tool(
     "check_usage",
     "Returns a JSON object with plan (string), credits_remaining (number), credits_total (number), period_start (ISO date), and period_end (ISO date). Call this before generate_clips to confirm the user has enough credits.",
-    {},
+    {
+      title: "Check Usage",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     async () => {
       try {
         const result = await apiCall(config, "GET", "/account/usage");
@@ -223,6 +257,41 @@ export function createServer(config: ApiConfig): McpServer {
         };
       }
     }
+  );
+
+  server.prompt(
+    "create-clips",
+    "Generate short-form clips from a YouTube video",
+    {
+      url: z.string().describe("Full YouTube video URL"),
+    },
+    ({ url }) => ({
+      messages: [
+        {
+          role: "user" as const,
+          content: {
+            type: "text" as const,
+            text: `Generate short-form clips from this YouTube video: ${url}\n\nCall generate_clips with this URL, then poll get_project_status every 15 seconds until status is 'completed'. Show me the clips sorted by score when ready.`,
+          },
+        },
+      ],
+    })
+  );
+
+  server.prompt(
+    "check-credits",
+    "Check remaining Crabcut credits and plan details",
+    () => ({
+      messages: [
+        {
+          role: "user" as const,
+          content: {
+            type: "text" as const,
+            text: "Check my Crabcut credit balance and plan details using check_usage.",
+          },
+        },
+      ],
+    })
   );
 
   return server;

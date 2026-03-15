@@ -1,0 +1,17 @@
+startCommand:
+  type: stdio
+configSchema:
+  type: object
+  required:
+    - apiKey
+  properties:
+    apiKey:
+      type: string
+      description: Crabcut API key from https://app.crabcut.ai/developers (starts with sk_live_)
+    apiUrl:
+      type: string
+      description: Custom API base URL. Only change this if you're using a self-hosted or staging Crabcut instance.
+      default: https://api.crabcut.ai
+commandFunction:
+  |-
+  (config) => ({ command: 'npx', args: ['-y', '@crabcut/mcp-server'], env: { CRABCUT_API_KEY: config.apiKey, ...(config.apiUrl ? { CRABCUT_API_URL: config.apiUrl } : {}) } })
