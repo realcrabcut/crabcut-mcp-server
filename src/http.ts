@@ -80,17 +80,15 @@ app.get("/.well-known/mcp/server-card.json", (_req, res) => {
 
 app.post("/mcp", async (req, res) => {
   const authHeader = req.headers.authorization;
-  if (!authHeader) {
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
     res.status(401).json({
-      error: "Missing API key. Pass your Crabcut API key as: Authorization: Bearer sk_live_...",
+      error: "Missing or invalid API key. Pass your Crabcut API key as: Authorization: Bearer sk_live_...",
       docs: "https://app.crabcut.ai/developers",
     });
     return;
   }
 
-  const apiKey = authHeader.startsWith("Bearer ")
-    ? authHeader.slice(7)
-    : authHeader;
+  const apiKey = authHeader.slice(7);
 
   try {
     const server = createServer({ apiKey, apiBase: API_BASE });

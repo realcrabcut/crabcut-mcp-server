@@ -37,7 +37,7 @@ Add to your config file — `claude_desktop_config.json` for Claude, `.cursor/mc
 
 ### Cursor Directory
 
-[![Install in Cursor](https://cursor.directory/api/badge?mc=crabcut)](https://cursor.directory/plugins/mcp-crabcut)
+[Install in Cursor](https://cursor.directory/plugins/mcp-crabcut)
 
 ### Smithery
 
