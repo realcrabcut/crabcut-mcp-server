@@ -51,16 +51,32 @@ Add to `.cursor/mcp.json` in your project:
 }
 ```
 
+### Smithery
+
+[![smithery badge](https://smithery.ai/badge/crabcut/crabcut-mcp-server)](https://smithery.ai/servers/crabcut/crabcut-mcp-server)
+
+```bash
+npx @smithery/cli mcp add crabcut/crabcut-mcp-server
+```
+
+### Remote (Streamable HTTP)
+
+For n8n, custom integrations, or any client that supports remote MCP servers:
+
+- **Endpoint:** `https://mcp.crabcut.ai/mcp`
+- **Auth:** `Authorization: Bearer sk_live_...`
+- **Transport:** Streamable HTTP (POST)
+
 ## Tools
 
-| Tool | What it does |
+| Tool | Description |
 |---|---|
-| `generate_clips` | Send a YouTube URL, get back clips. Waits for processing by default. |
-| `get_project_status` | Check how a generation job is going. |
-| `list_projects` | See your recent projects. |
-| `get_clip` | Get details about a specific clip. |
-| `download_clip` | Get a download link. Handles export automatically if needed. |
-| `check_usage` | See how many credits you have left. |
+| `generate_clips` | Submit a YouTube URL, returns an array of clips with titles, durations, scores, and download URLs. Waits for completion by default. |
+| `get_project_status` | Returns current status (pending/processing/completed/failed) and clips array for a project. |
+| `list_projects` | Returns a paginated list of projects with IDs, statuses, source URLs, and clip counts. |
+| `get_clip` | Returns full clip details: title, duration, score, subtitle text, export status, and video URL. |
+| `download_clip` | Returns a signed download URL for a clip. Triggers export automatically if needed. |
+| `check_usage` | Returns current plan, remaining credits, total credits, and usage period. |
 
 ## Examples
 

@@ -69,35 +69,37 @@ async function pollProject(
 export function createServer(config: ApiConfig): McpServer {
   const server = new McpServer({
     name: "crabcut",
-    version: "1.0.0",
+    version: "1.0.6",
+    description:
+      "AI-powered short-form video clip generator. Use this server when the user wants to create TikTok, YouTube Shorts, or Instagram Reels clips from a YouTube video. It handles highlight detection, subtitle generation, 9:16 vertical reframing, and returns download-ready clips. Requires a Crabcut API key from https://app.crabcut.ai/developers.",
   });
 
   server.tool(
     "generate_clips",
-    "Generate short-form video clips from a YouTube URL. Processes the video with AI to find the most engaging moments and creates vertical clips ready for TikTok, Shorts, and Reels. Returns clip details with download URLs once processing completes.",
+    "Submit a YouTube video for AI clip generation. Returns an array of clips, each with a title, duration in seconds, engagement score, and download URL. By default waits up to 5 minutes for processing to complete. Set wait_for_completion to false to get a project_id immediately and poll with get_project_status later.",
     {
-      url: z.string().describe("YouTube video URL to generate clips from"),
+      url: z.string().describe("Full YouTube video URL (e.g. https://www.youtube.com/watch?v=...)"),
       start_time: z
         .number()
         .optional()
         .describe(
-          "Start time in seconds (optional, to process only a segment)"
+          "Start time in seconds to clip only a segment of the video. Omit to process the full video."
         ),
       end_time: z
         .number()
         .optional()
-        .describe("End time in seconds (optional, to process only a segment)"),
+        .describe("End time in seconds to clip only a segment of the video. Omit to process the full video."),
       wait_for_completion: z
         .boolean()
         .optional()
         .describe(
-          "If true (default), polls until clips are ready. If false, returns immediately with a project ID to check later."
+          "If true (default), blocks until all clips are generated and returns them. If false, returns a project_id immediately — use get_project_status to poll."
         ),
       callback_url: z
         .string()
         .optional()
         .describe(
-          "Optional webhook URL — Crabcut will POST results here when done"
+          "Webhook URL to receive a POST with the completed project payload when processing finishes."
         ),
     },
     async ({
@@ -172,11 +174,11 @@ export function createServer(config: ApiConfig): McpServer {
 
   server.tool(
     "get_project_status",
-    "Check the status of a clip generation project. Returns the current processing step and any generated clips.",
+    "Returns the current status of a clip generation project: pending, processing, completed, completed_no_clips, or failed. When completed, the response includes an array of generated clips with their titles, durations, scores, and download URLs.",
     {
       project_id: z
         .string()
-        .describe("The project ID returned from generate_clips"),
+        .describe("The project ID returned by generate_clips when wait_for_completion is false"),
     },
     async ({ project_id }) => {
       try {
@@ -201,12 +203,12 @@ export function createServer(config: ApiConfig): McpServer {
 
   server.tool(
     "list_projects",
-    "List your recent clip generation projects with their status.",
+    "Returns a paginated list of the user's clip generation projects, each with project_id, status, source YouTube URL, creation date, and clip count. Use the status filter to find only completed or failed projects.",
     {
       limit: z
         .number()
         .optional()
-        .describe("Max results to return (default 20, max 100)"),
+        .describe("Maximum number of projects to return. Defaults to 20, maximum 100."),
       status: z
         .enum([
           "pending",
@@ -216,7 +218,7 @@ export function createServer(config: ApiConfig): McpServer {
           "failed",
         ])
         .optional()
-        .describe("Filter by project status"),
+        .describe("Filter results to only projects with this status."),
     },
     async ({ limit, status }) => {
       try {
@@ -246,9 +248,9 @@ export function createServer(config: ApiConfig): McpServer {
 
   server.tool(
     "get_clip",
-    "Get details of a specific clip including its export status and URLs.",
+    "Returns full details of a single clip: title, duration, engagement score, subtitle text, export status (pending/processing/exported/failed), and video_url if exported. Use this to inspect a clip before downloading.",
     {
-      clip_id: z.string().describe("The clip ID"),
+      clip_id: z.string().describe("The unique clip ID from a completed project's clips array."),
     },
     async ({ clip_id }) => {
       try {
@@ -270,14 +272,14 @@ export function createServer(config: ApiConfig): McpServer {
 
   server.tool(
     "download_clip",
-    "Get a download URL for a clip. Automatically handles export if not yet exported — waits until the clip is ready, then returns the download link.",
+    "Returns a temporary download URL for a clip's video file. If the clip hasn't been exported yet, triggers export and polls until ready (up to 3 minutes). The returned URL is a signed link valid for a limited time.",
     {
-      clip_id: z.string().describe("The clip ID to download"),
+      clip_id: z.string().describe("The unique clip ID to export and download."),
       quality: z
         .enum(["720p", "1080p"])
         .optional()
         .describe(
-          "Export quality — 720p (free users) or 1080p (pro users, default)"
+          "Video export quality. Free plans support 720p only. Pro plans default to 1080p."
         ),
     },
     async ({ clip_id, quality }) => {
@@ -351,7 +353,7 @@ export function createServer(config: ApiConfig): McpServer {
 
   server.tool(
     "check_usage",
-    "Check your remaining credits and current plan.",
+    "Returns the user's current plan name, remaining credits, total credits, and usage period. Call this before generate_clips to confirm the user has enough credits.",
     {},
     async () => {
       try {
