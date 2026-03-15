@@ -26,7 +26,7 @@ app.get("/.well-known/mcp/server-card.json", (_req, res) => {
       {
         name: "generate_clips",
         description:
-          "Start AI clip generation from a YouTube video. Returns a project_id immediately. Poll with get_project_status every 10-15 seconds, or provide a callback_url for webhook notification.",
+          "Start AI clip generation from a YouTube video. Returns {project_id, status, poll_url, estimated_minutes}. Poll with get_project_status every 10-15 seconds, or provide a callback_url for webhook notification.",
         inputSchema: {
           type: "object",
           properties: {
@@ -40,7 +40,7 @@ app.get("/.well-known/mcp/server-card.json", (_req, res) => {
       },
       {
         name: "get_project_status",
-        description: "Returns project status and clips sorted by score. Each clip has a clip_status (pending/exporting/completed/failed) and download_url when ready. Poll every 10-15 seconds.",
+        description: "Returns {id, name, status, step, error, expected_clips, duration, clips[]}. Clips sorted by score, each with clip_status (pending/exporting/completed/failed) and download_url when ready.",
         inputSchema: {
           type: "object",
           properties: { project_id: { type: "string", description: "The project ID returned by generate_clips." } },
@@ -49,7 +49,7 @@ app.get("/.well-known/mcp/server-card.json", (_req, res) => {
       },
       {
         name: "list_projects",
-        description: "Returns a paginated list of the user's projects with IDs, statuses, and clip counts.",
+        description: "Returns {projects[], total, limit, offset}. Each project has id, name, status, step, expected_clips, clips_count, duration, created_at.",
         inputSchema: {
           type: "object",
           properties: {
@@ -60,7 +60,7 @@ app.get("/.well-known/mcp/server-card.json", (_req, res) => {
       },
       {
         name: "get_clip",
-        description: "Returns full details of a single clip: title, duration, score, clip_status, and download_url when exported.",
+        description: "Returns full clip details: id, project_id, title, duration, score, reason, export_status, export_quality, is_exported, video_url, thumbnail_url.",
         inputSchema: {
           type: "object",
           properties: { clip_id: { type: "string", description: "The unique clip ID from a project's clips array." } },
@@ -69,7 +69,7 @@ app.get("/.well-known/mcp/server-card.json", (_req, res) => {
       },
       {
         name: "check_usage",
-        description: "Returns the user's current plan, remaining credits, total credits, and usage period.",
+        description: "Returns {plan, credits_remaining, credits_total, period_start, period_end}. Check before generate_clips to confirm enough credits.",
         inputSchema: { type: "object", properties: {} },
       },
     ],

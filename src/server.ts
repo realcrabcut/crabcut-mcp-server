@@ -46,7 +46,7 @@ export function createServer(config: ApiConfig): McpServer {
 
   server.tool(
     "generate_clips",
-    "Start AI clip generation from a YouTube video. Returns a project_id immediately. Use get_project_status to poll for results every 10-15 seconds, or provide a callback_url to receive a webhook when all clips are ready with download links.",
+    "Start AI clip generation from a YouTube video. Returns a JSON object with project_id (string), status ('processing'), poll_url (string), and estimated_minutes (number). Processing is async -- use get_project_status to poll every 10-15 seconds, or provide a callback_url to receive a webhook POST when all clips are exported with download URLs.",
     {
       url: z.string().describe("Full YouTube video URL (e.g. https://www.youtube.com/watch?v=...)"),
       start_time: z
@@ -107,7 +107,7 @@ export function createServer(config: ApiConfig): McpServer {
 
   server.tool(
     "get_project_status",
-    "Returns the current status of a clip generation project: pending, processing, completed, completed_no_clips, or failed. Clips are sorted by score (best first). Each clip has a clip_status (pending, exporting, completed, failed) and a download_url when completed. Poll every 10-15 seconds.",
+    "Returns a JSON object with id, name, status (pending/processing/completed/completed_no_clips/failed), step, error, expected_clips, duration, created_at, and a clips array. Clips are sorted by score (highest first). Each clip has: id, title, duration, score, reason, clip_status (pending/exporting/completed/failed), download_url (string or null), quality, thumbnail_url, created_at, updated_at. The download_url is only available when clip_status is 'completed'. Poll every 10-15 seconds until project status is 'completed'.",
     {
       project_id: z
         .string()
@@ -136,7 +136,7 @@ export function createServer(config: ApiConfig): McpServer {
 
   server.tool(
     "list_projects",
-    "Returns a paginated list of the user's clip generation projects, each with project_id, status, source YouTube URL, creation date, and clip count. Use the status filter to find only completed or failed projects.",
+    "Returns a JSON object with projects (array), total, limit, and offset. Each project has: id, name, status, step, expected_clips, clips_count, duration, created_at. Use the status filter to find only completed or failed projects.",
     {
       limit: z
         .number()
@@ -181,7 +181,7 @@ export function createServer(config: ApiConfig): McpServer {
 
   server.tool(
     "get_clip",
-    "Returns full details of a single clip: title, duration, engagement score, clip_status (pending/exporting/completed/failed), and download_url when exported.",
+    "Returns a JSON object with full clip details: id, project_id, title, duration, score, reason, export_status, export_quality (720p/1080p), is_exported, video_url, video_url_720p, video_url_1080p, thumbnail_url, created_at, updated_at.",
     {
       clip_id: z.string().describe("The unique clip ID from a project's clips array."),
     },
@@ -205,7 +205,7 @@ export function createServer(config: ApiConfig): McpServer {
 
   server.tool(
     "check_usage",
-    "Returns the user's current plan name, remaining credits, total credits, and usage period. Call this before generate_clips to confirm the user has enough credits.",
+    "Returns a JSON object with plan (string), credits_remaining (number), credits_total (number), period_start (ISO date), and period_end (ISO date). Call this before generate_clips to confirm the user has enough credits.",
     {},
     async () => {
       try {
