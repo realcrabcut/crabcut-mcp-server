@@ -1,6 +1,29 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# ---------------------------------------------------------------------------
+# Only committed code on main is deployed
+# ---------------------------------------------------------------------------
+# The image is built from this directory (`az acr build .`), so anything
+# uncommitted would ship without ever being reviewed, tested by CI, or recorded
+# in history. ALLOW_DIRTY_DEPLOY=1 overrides this for an emergency.
+# (Same rule as crabcut-backend/scripts/deploy-azure.mjs.)
+if [[ "${ALLOW_DIRTY_DEPLOY:-}" != "1" ]]; then
+  if ! _dirty="$(git status --porcelain 2>/dev/null)" || ! _branch="$(git branch --show-current 2>/dev/null)"; then
+    echo "Could not read git state; refusing to deploy. Set ALLOW_DIRTY_DEPLOY=1 to override." >&2
+    exit 1
+  fi
+  if [[ -n "$_dirty" ]]; then
+    echo "Refusing to deploy: there are uncommitted changes." >&2
+    echo "$_dirty" >&2
+    exit 1
+  fi
+  if [[ "$_branch" != "main" ]]; then
+    echo "Refusing to deploy from branch \"$_branch\"; deploy from main." >&2
+    exit 1
+  fi
+fi
+
 REGISTRY="crabcutacr"
 IMAGE="mcp-server"
 APP_NAME="crabcut-mcp-server"
