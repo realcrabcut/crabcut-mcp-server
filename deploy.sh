@@ -6,6 +6,11 @@ IMAGE="mcp-server"
 APP_NAME="crabcut-mcp-server"
 RESOURCE_GROUP="crabcut-rg"
 
+if [[ "${ENABLE_MCP_SERVER_DEPLOY:-}" != "true" ]]; then
+  echo "MCP server deploy is disabled. Set ENABLE_MCP_SERVER_DEPLOY=true to deploy $APP_NAME."
+  exit 1
+fi
+
 TAG="v$(date +%Y%m%d-%H%M%S)"
 
 echo "==> Building and pushing $REGISTRY.azurecr.io/$IMAGE:$TAG ..."
